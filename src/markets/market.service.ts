@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import * as bcrypt from 'bcrypt';
+
 import { MarketSignUpInput, MarketUpdateInput } from './input/market.input';
 
 import Market from './market.entity';
@@ -21,18 +23,37 @@ export class MarketService {
   }
 
   async create(input: MarketSignUpInput): Promise<Market> {
-    this.marketRepository.create(input);
+    const { password, ...data }: Market = this.marketRepository.create(input);
 
-    const createdMarket = await this.marketRepository.save(input);
+    const hashedPassword = bcrypt.hashSync(password, 8);
+
+    const createdMarket = await this.marketRepository.save({
+      password: hashedPassword,
+      ...data,
+    });
 
     return createdMarket;
   }
 
   async update(fieldsToUpdate: MarketUpdateInput): Promise<Market> {
     const marketToUpdate = await this.marketRepository.findOne(fieldsToUpdate.id);
-    
+
+    if(!marketToUpdate) {
+      throw new Error('Mercado não encontrado');
+    }
+
     // Pegar todos os campos alterados para trocá-los no BD.
-    console.log(Object.keys(fieldsToUpdate));
+    const fieldsToMap = Object.entries(fieldsToUpdate);
+
+    fieldsToMap.forEach(([key, newValue]) => {
+      if (marketToUpdate['id'] === marketToUpdate[key]) {
+        return;
+      }
+
+      marketToUpdate[key] = newValue;
+    });
+
+    await this.marketRepository.save(marketToUpdate);
 
     return marketToUpdate;
   }
